@@ -11,6 +11,7 @@ find_package(OpenGL REQUIRED)
 set(SOURCES
     src/main.cpp
     src/shader.cpp
+    src/compute_shader.cpp
     src/camera.cpp
     src/model/model.cpp
     src/model/model_utils.cpp

@@ -1,0 +1,99 @@
+#version 430
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+const int RAYS_PER_ID = 1;
+const int BOUNCES = 1;
+
+/*------------*
+|   STRUCTS   |
+*-------------*/
+
+struct Face {
+    int indices[3]; // vertex indices
+};
+
+struct Vertex {
+    float x, y, z; // position 
+    float nX, nY, nZ; // normal vector
+};
+
+struct Triangle {
+    vec3 pos[3];
+    vec3 normals[3];
+};
+
+struct Ray {
+    vec3 direction;
+    vec3 origin;
+};
+
+/*--------------------*
+|  USER DEFINED DATA  |
+*---------------------*/
+
+layout(rgba32f, binding = 0) uniform image2D screen;
+
+layout(std430, binding = 1) buffer Faces {
+    Face faces[];
+};
+
+layout(std430, binding = 2) buffer Vertices {
+    Vertex vertices[];
+};
+
+layout(std430, binding = 3) buffer ModelsVertexOffset {
+    int modelsVertexOffset[];
+};
+
+layout(std430, binding = 4) buffer ModelsFaceOffset {
+    int modelsFacesOffset[];
+};
+
+layout(std430, binding = 5) buffer ModelTransformation {
+    mat4x4 modelTransformations[];
+};
+
+uniform int width;
+uniform int height;
+uniform int numberOfModels;
+uniform mat4x4 viewTransform;
+
+/*------------*
+|  FUNCTIONS  |
+*-------------*/
+
+bool rayTriangleIntersection(Ray ray, Triangle tr) {
+    return false;
+}
+
+Ray createRay() {
+    Ray ray;
+    ray.direction = vec3(1, 1, 1);
+    ray.origin = vec3(0, 0, 0);
+
+    return ray;
+}
+
+vec3 findFirstIntersection() {
+    vec3 color = vec3(1, 0.5, 0.25);
+    return color;
+}
+
+
+/*------------*
+|     MAIN    |
+*-------------*/
+
+void main() {
+    ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+
+    if (id.x >= width || id.y >= height) {
+        return;
+    }
+
+    // vec4 color = vec4(float(id.x) / float(width), float(id.y) / float(height), 0.5, 1.0);
+    vec4 color = vec4(findFirstIntersection(), 1.0);
+
+    imageStore(screen, id, color);
+}

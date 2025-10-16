@@ -1,0 +1,319 @@
+#version 430
+
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+const int RAYS_PER_PIXEL = 3;
+const int MAX_DEPTH = 5;
+const vec3 BG_COLOR = vec3(0);
+
+const float EPSILON = 0.000001;
+
+const float MAX_INT = 4294967295.0f;
+
+/*------------*
+|   STRUCTS   |
+*-------------*/
+
+struct Material {
+    vec3 color;
+    float smoothness; 
+    vec3 emissionColor;
+    float luminosity;
+    float specularProbability;
+}; 
+
+struct Sphere {
+    vec3 center;    
+    float radius;
+    Material material;
+};
+
+struct Vertex {
+    vec3 pos;
+    vec3 normal;
+};
+
+struct ModelInfo {
+    int vertexCount;
+    int indexCount;
+    int materialIndex;
+};
+
+struct Ray {
+    vec3 origin;
+    vec3 direction;
+};
+
+struct HitInfo {
+    bool hit;
+    float dist;
+    vec3 point;
+    vec3 normal; 
+    Material material;
+};
+
+/*--------------------*
+|  USER DEFINED DATA  |
+*---------------------*/
+
+layout(rgba32f, binding = 0) uniform image2D thisFrame;
+layout(rgba32f, binding = 1) uniform image2D lastFrame;
+
+layout(std430, binding = 2) buffer Spheres {
+    Sphere spheres[];
+};
+
+layout(std430, binding = 3) buffer Vertices {
+    Vertex vertices[];
+};
+
+layout(std430, binding = 4) buffer Indices {
+    vec4 indices[];
+};
+
+layout(std430, binding = 5) buffer Materials {
+    Material materials[];
+};
+
+layout(std430, binding = 6) buffer ModelInfos {
+    ModelInfo modelInfos[];
+};
+
+uniform mat4 viewMatrix;
+uniform vec3 cameraPosition;
+
+uniform int width;
+uniform int height;
+
+uniform int numberOfSpheres;
+uniform int numberOfModels;
+
+uniform int frameCounter;
+uniform bool accumulateFrames;
+
+/*------------*
+|  FUNCTIONS  |
+*-------------*/
+
+vec2 getUV(ivec2 id) {
+    float aspectRatio = float(width) / float(height);
+    return vec2(((float(id.x) / float(width)) * 2.0 - 1.0) * aspectRatio,
+                (float(id.y) / float(height)) * 2.0 - 1.0);
+}
+
+float randomValue(inout uint state) {
+    state = state * 747796405 + 2891336453;
+    uint result = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
+    result = (result >> 22) ^ result;
+    return result / 4294967295.0;
+}
+
+vec3 randomUnitVector(inout uint state)
+{
+    float z = randomValue(state) * 2.0f - 1.0f;
+    float a = randomValue(state) * 6.2831;
+    float r = sqrt(1.0f - z * z);
+    float x = r * cos(a);
+    float y = r * sin(a);
+    return vec3(x, y, z);
+}
+
+HitInfo raySphereIntersection(Ray r, Sphere sphere) {
+    HitInfo hitInfo;
+    hitInfo.hit = false;
+    hitInfo.material.color = BG_COLOR;
+    hitInfo.material.luminosity = 0.0f;
+    hitInfo.material.smoothness = 0.0f;
+
+    vec3 center = sphere.center;
+    float radius = sphere.radius;
+
+    vec3 oc = center - r.origin;
+    float a = dot(r.direction, r.direction);
+    float b = -2.0f * dot(r.direction, oc);
+    float c = dot(oc, oc) - radius*radius;
+    float d = b * b - 4.0f * a * c;
+    if (d >= 0) {
+        float t = (-b - sqrt(d)) / (2.0f * a);
+        if (t > 0.0f) {
+            vec3 spherePoint = r.origin + t * r.direction;
+            vec3 sphereNormal = normalize(spherePoint - center);
+
+            hitInfo.hit = true;
+            hitInfo.dist = t;
+            hitInfo.point = spherePoint;
+            hitInfo.normal = sphereNormal;
+            hitInfo.material = sphere.material;
+        }
+    }
+
+    return hitInfo;
+}
+
+HitInfo rayTriangleIntersection(Ray r, int modelIndex, int faceIndex, int vertexOffset, int indexOffset) {
+    HitInfo hitInfo;
+    hitInfo.hit = false;
+    hitInfo.material.color = BG_COLOR;
+    hitInfo.material.luminosity = 0.0f;
+    hitInfo.material.smoothness = 0.0f;
+
+    Vertex t1 = vertices[int(indices[faceIndex + indexOffset].x) + vertexOffset];
+    Vertex t2 = vertices[int(indices[faceIndex + indexOffset].y) + vertexOffset];
+    Vertex t3 = vertices[int(indices[faceIndex + indexOffset].z) + vertexOffset];
+
+    vec3 c1 = -r.direction;
+    vec3 c2 = t2.pos - t1.pos;
+    vec3 c3 = t3.pos - t1.pos;
+    vec3 c = r.origin - t1.pos;
+
+    vec3 n = cross(c2, c3);
+    vec3 e = cross(c1, c);
+    float d = dot(c1, n); 
+
+    float t = dot(c, n) / d;
+    float u2 =  dot(c3, e) / d;
+    float u3 = dot(-c2, e) / d;
+
+    if (u2 < 0 || u3 < 0 || u2 + u3 > 1) {
+        return hitInfo;
+    }
+
+    float u1 = 1.0f - u2 - u3;
+    vec3 pointNormal = normalize(u1 * t1.normal + u2 * t2.normal + u3 * t3.normal);
+
+    // if (dot(r.direction, pointNormal) > 0) {
+    //     return hitInfo;
+    // }
+
+    if (t > EPSILON) {
+        hitInfo.hit = true;
+        hitInfo.dist = t;
+        hitInfo.point = r.origin + t * r.direction;
+        hitInfo.normal = pointNormal;
+        hitInfo.material = materials[modelIndex];
+    }
+
+    return hitInfo;
+}
+
+HitInfo findFirstIntersection(Ray ray) {
+    HitInfo closestHitInfo;
+    closestHitInfo.hit = false;
+    closestHitInfo.dist = MAX_INT;
+    closestHitInfo.material.color = BG_COLOR;
+    closestHitInfo.material.luminosity = 0;
+
+    for (int i = 0; i < numberOfSpheres; i++) {
+        HitInfo hitInfo = raySphereIntersection(ray, spheres[i]);
+        if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
+            closestHitInfo.hit = hitInfo.hit;
+            closestHitInfo.dist = hitInfo.dist;
+            closestHitInfo.point = hitInfo.point;
+            closestHitInfo.normal = hitInfo.normal;
+            closestHitInfo.material = hitInfo.material;
+        }
+    }
+
+    int indexOffset = 0;
+    int vertexOffset = 0;
+
+    for (int i = 0; i < numberOfModels; i++) {
+        int faceCount = modelInfos[i].indexCount;
+        
+        for (int j = 0; j < faceCount; j++) {
+            HitInfo hitInfo = rayTriangleIntersection(ray, i, j, vertexOffset, indexOffset);
+            if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
+                closestHitInfo.hit = hitInfo.hit;
+                closestHitInfo.dist = hitInfo.dist;
+                closestHitInfo.point = hitInfo.point;
+                closestHitInfo.normal = hitInfo.normal;
+                closestHitInfo.material = hitInfo.material;
+            }
+        }
+
+        vertexOffset += modelInfos[i].vertexCount;
+        indexOffset += faceCount;
+    }
+
+    return closestHitInfo;
+}
+
+Ray createRay(vec2 uv) {
+    Ray ray;
+    ray.origin = cameraPosition;
+
+    vec4 worldDir = inverse(viewMatrix) * vec4(uv, -1, 0);
+    ray.direction = normalize(worldDir.xyz);
+
+    return ray;
+}
+
+vec3 getDiffuseDirection(vec3 surfaceNormal, inout uint rngState) {
+    return normalize(surfaceNormal + randomUnitVector(rngState));
+}
+
+vec3 getSpecularDirection(vec3 rayDir, vec3 surfaceNormal) {
+    return normalize(rayDir - 2 * surfaceNormal * dot(surfaceNormal, rayDir));
+}
+ 
+vec3 trace(Ray ray, inout uint rngState) {
+    HitInfo hitInfo;
+    vec3 color = vec3(1);
+    float luminosity = 0;
+
+    for (int i = 0; i < MAX_DEPTH; i++) {
+        hitInfo = findFirstIntersection(ray);
+        
+        if (hitInfo.hit) {
+            luminosity += hitInfo.material.luminosity;
+            color *= hitInfo.material.color;
+
+            ray.origin = hitInfo.point + hitInfo.normal * EPSILON;
+            ray.direction = mix(getDiffuseDirection(hitInfo.normal, rngState), 
+                                getSpecularDirection(ray.direction, hitInfo.normal), 
+                                hitInfo.material.smoothness * hitInfo.material.specularProbability);
+        } else {
+            break;
+        }
+    }  
+
+    return color * luminosity;
+}
+
+
+/*------------*
+|     MAIN    |
+*-------------*/
+
+void main() {
+    ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+
+    if (id.x >= width || id.y >= height) {
+        return;
+    }
+
+    uint pixelIndex = id.y * width + id.x;
+    uint rngState = pixelIndex;
+
+    if (accumulateFrames) {
+        rngState += 1236546 * frameCounter;
+    }
+
+    Ray ray;
+    vec2 uv = getUV(id);
+    int depth = 0;
+
+    vec3 color = vec3(0, 0, 0);
+    for (int i = 0; i < RAYS_PER_PIXEL; i++) {
+        ray = createRay(uv);
+        color += trace(ray, rngState);
+    }
+    color = color;
+
+    if (accumulateFrames) {
+        vec3 prev = imageLoad(lastFrame, id).rgb;
+        color = mix(prev, color, 1.0 / float(frameCounter + 1));
+    }
+    
+    imageStore(thisFrame, id, vec4(color, 1.0));
+}

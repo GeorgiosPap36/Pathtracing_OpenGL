@@ -14,14 +14,22 @@ struct Triangle{
     }
 };
 
-struct Vertex{
-    float x, y, z, nX, nY, nZ;
+struct alignas(16) Vertex{
+    float x, y, z, pad1, nX, nY, nZ, pad2;
 
     Vertex() {
         x = y = z = nX = nY = nZ = 0;
     }
 
     Vertex(float x, float y, float z) : x(x), y(y), z(z) {
+    }
+
+    Vertex(glm::vec3 pos, glm::vec3 normal) 
+        : x(pos.x), y(pos.y), z(pos.z), nX(normal.x), nY(normal.y), nZ(normal.z) {
+    }
+
+    Vertex(float x, float y, float z, float nX, float nY, float nZ) 
+        : x(x), y(y), z(z), nX(nX), nY(nY), nZ(nZ) {
     }
 };
 
