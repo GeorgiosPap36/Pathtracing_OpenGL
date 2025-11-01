@@ -36,7 +36,7 @@ else()
     find_package(glfw3 REQUIRED)
     find_package(glm CONFIG REQUIRED)
 
-    target_link_libraries(TestProject 
+    target_link_libraries(Raytracing_OpenGL 
         glfw
         glm::glm
         OpenGL::GL
