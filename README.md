@@ -1,1 +1,6 @@
 # Raytracing_OpenGL
+
+## Sources:
+- [Implementing a practical rendering system using GLSL - Toshiya Hachisuka](https://cs.uwaterloo.ca/%7Ethachisu/tdf2015.pdf)
+- [Efficiency Issues for Ray Tracing - Brian Smits](https://www.cse.chalmers.se/edu/year/2018/course/TDA362/EfficiencyIssuesForRayTracing.pdf)
+- [How to build a BVH](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)

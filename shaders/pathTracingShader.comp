@@ -2,7 +2,7 @@
 
 layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-const int RAYS_PER_PIXEL = 3;
+const int RAYS_PER_PIXEL = 10;
 const int MAX_DEPTH = 5;
 const vec3 BG_COLOR = vec3(0);
 
@@ -33,10 +33,21 @@ struct Vertex {
     vec3 normal;
 };
 
+struct BVHNode {
+    vec3 minVertPos;
+    int leftNodeIndex;
+    vec3 maxVertPos;
+    int rightNodeIndex;
+    bool isLeaf;
+    int firstFaceIndex;
+    int lastFaceIndex;
+};
+
 struct ModelInfo {
     int vertexCount;
     int indexCount;
     int materialIndex;
+    int bvhNodeIndex;
 };
 
 struct Ray {
@@ -75,7 +86,11 @@ layout(std430, binding = 5) buffer Materials {
     Material materials[];
 };
 
-layout(std430, binding = 6) buffer ModelInfos {
+layout(std430, binding = 6) buffer BVHNodes {
+    BVHNode bvhNodes[];
+};
+
+layout(std430, binding = 7) buffer ModelInfos {
     ModelInfo modelInfos[];
 };
 
@@ -108,8 +123,7 @@ float randomValue(inout uint state) {
     return result / 4294967295.0;
 }
 
-vec3 randomUnitVector(inout uint state)
-{
+vec3 randomUnitVector(inout uint state) {
     float z = randomValue(state) * 2.0f - 1.0f;
     float a = randomValue(state) * 6.2831;
     float r = sqrt(1.0f - z * z);
@@ -150,16 +164,12 @@ HitInfo raySphereIntersection(Ray r, Sphere sphere) {
     return hitInfo;
 }
 
-HitInfo rayTriangleIntersection(Ray r, int modelIndex, int faceIndex, int vertexOffset, int indexOffset) {
+HitInfo rayTriangleIntersection(Ray r, Vertex t1, Vertex t2, Vertex t3, int modelIndex) {
     HitInfo hitInfo;
     hitInfo.hit = false;
     hitInfo.material.color = BG_COLOR;
     hitInfo.material.luminosity = 0.0f;
     hitInfo.material.smoothness = 0.0f;
-
-    Vertex t1 = vertices[int(indices[faceIndex + indexOffset].x) + vertexOffset];
-    Vertex t2 = vertices[int(indices[faceIndex + indexOffset].y) + vertexOffset];
-    Vertex t3 = vertices[int(indices[faceIndex + indexOffset].z) + vertexOffset];
 
     vec3 c1 = -r.direction;
     vec3 c2 = t2.pos - t1.pos;
@@ -196,6 +206,59 @@ HitInfo rayTriangleIntersection(Ray r, int modelIndex, int faceIndex, int vertex
     return hitInfo;
 }
 
+bool rayAABBIntersection(Ray ray, vec3 minVertPos, vec3 maxVertPos) {
+    float tx1 = (minVertPos.x - ray.origin.x) / ray.direction.x;
+    float tx2 = (maxVertPos.x - ray.origin.x) / ray.direction.x;
+    float tmin = min(tx1, tx2);
+    float tmax = max(tx1, tx2);
+    float ty1 = (minVertPos.y - ray.origin.y) / ray.direction.y; 
+    float ty2 = (maxVertPos.y - ray.origin.y) / ray.direction.y;
+    tmin = max(tmin, min(ty1, ty2));
+    tmax = min(tmax, max(ty1, ty2));
+    float tz1 = (minVertPos.z - ray.origin.z) / ray.direction.z;
+    float tz2 = (maxVertPos.z - ray.origin.z) / ray.direction.z;
+    tmin = max(tmin, min(tz1, tz2));
+    tmax = min(tmax, max(tz1, tz2));
+    return tmax >= tmin && tmax > 0;;
+}
+
+HitInfo traverseBVH(Ray ray, BVHNode bvhNode, int modelIndex, int vertexOffset) {
+    HitInfo closestHitInfo;
+    closestHitInfo.hit = false;
+    closestHitInfo.dist = MAX_INT;
+    closestHitInfo.material.color = BG_COLOR;
+    closestHitInfo.material.luminosity = 0;
+
+    BVHNode node = bvhNode;
+
+    bool intersectsBVH = rayAABBIntersection(ray, node.minVertPos, node.maxVertPos);
+
+    while (intersectsBVH) {
+        if (node.isLeaf) {
+            for (int i = node.firstFaceIndex; i <= node.lastFaceIndex; i++) {
+                Vertex t1 = vertices[int(indices[i].x) + vertexOffset];
+                Vertex t2 = vertices[int(indices[i].y) + vertexOffset];
+                Vertex t3 = vertices[int(indices[i].z) + vertexOffset];
+
+                HitInfo hitInfo = rayTriangleIntersection(ray, t1, t2, t3, modelIndex);
+                if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
+                    closestHitInfo.hit = hitInfo.hit;
+                    closestHitInfo.dist = hitInfo.dist;
+                    closestHitInfo.point = hitInfo.point;
+                    closestHitInfo.normal = hitInfo.normal;
+                    closestHitInfo.material = hitInfo.material;
+                }
+            }
+
+            return closestHitInfo;
+        }
+
+        
+    }
+
+    return closestHitInfo;
+}
+
 HitInfo findFirstIntersection(Ray ray) {
     HitInfo closestHitInfo;
     closestHitInfo.hit = false;
@@ -214,25 +277,45 @@ HitInfo findFirstIntersection(Ray ray) {
         }
     }
 
-    int indexOffset = 0;
+    // int indexOffset = 0;
+    // int vertexOffset = 0;
+
+    // for (int i = 0; i < numberOfModels; i++) {
+    //     int faceCount = modelInfos[i].indexCount;
+        
+    //     for (int j = 0; j < faceCount; j++) {
+    //         Vertex t1 = vertices[int(indices[j + indexOffset].x) + vertexOffset];
+    //         Vertex t2 = vertices[int(indices[j + indexOffset].y) + vertexOffset];
+    //         Vertex t3 = vertices[int(indices[j + indexOffset].z) + vertexOffset];
+
+    //         HitInfo hitInfo = rayTriangleIntersection(ray, t1, t2, t3, i);
+    //         if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
+    //             closestHitInfo.hit = hitInfo.hit;
+    //             closestHitInfo.dist = hitInfo.dist;
+    //             closestHitInfo.point = hitInfo.point;
+    //             closestHitInfo.normal = hitInfo.normal;
+    //             closestHitInfo.material = hitInfo.material;
+    //         }
+    //     }
+
+    //     vertexOffset += modelInfos[i].vertexCount;
+    //     indexOffset += faceCount;
+    // }
+
     int vertexOffset = 0;
 
     for (int i = 0; i < numberOfModels; i++) {
-        int faceCount = modelInfos[i].indexCount;
-        
-        for (int j = 0; j < faceCount; j++) {
-            HitInfo hitInfo = rayTriangleIntersection(ray, i, j, vertexOffset, indexOffset);
-            if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
-                closestHitInfo.hit = hitInfo.hit;
-                closestHitInfo.dist = hitInfo.dist;
-                closestHitInfo.point = hitInfo.point;
-                closestHitInfo.normal = hitInfo.normal;
-                closestHitInfo.material = hitInfo.material;
-            }
+
+        HitInfo hitInfo = traverseBVH(ray, bvhNodes[modelInfos[i].bvhNodeIndex], i, vertexOffset);
+        if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
+            closestHitInfo.hit = hitInfo.hit;
+            closestHitInfo.dist = hitInfo.dist;
+            closestHitInfo.point = hitInfo.point;
+            closestHitInfo.normal = hitInfo.normal;
+            closestHitInfo.material = hitInfo.material;
         }
 
         vertexOffset += modelInfos[i].vertexCount;
-        indexOffset += faceCount;
     }
 
     return closestHitInfo;
@@ -308,7 +391,7 @@ void main() {
         ray = createRay(uv);
         color += trace(ray, rngState);
     }
-    color = color;
+    // color = color / RAYS_PER_PIXEL;
 
     if (accumulateFrames) {
         vec3 prev = imageLoad(lastFrame, id).rgb;

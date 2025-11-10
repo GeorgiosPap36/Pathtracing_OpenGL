@@ -43,25 +43,47 @@ struct alignas(16) Sphere {
     }
 };
 
+struct alignas(16) BVHNode {
+    glm::vec3 minVertPos;
+    int leftNodeIndex;
+    glm::vec3 maxVertPos;
+    int rightNodeIndex;
+    bool isLeaf;
+    int firstFaceIndex;
+    int lastFaceIndex;
+
+    BVHNode(glm::vec3 minVertPos, glm::vec3 maxVertPos, bool isLeaf, int firstFaceIndex, int lastFaceIndex) 
+        : minVertPos(minVertPos), leftNodeIndex(leftNodeIndex), maxVertPos(maxVertPos), rightNodeIndex(rightNodeIndex), 
+        isLeaf(isLeaf), firstFaceIndex(firstFaceIndex), lastFaceIndex(lastFaceIndex) {
+
+        leftNodeIndex = -1;
+        rightNodeIndex = -1;
+    }
+
+    BVHNode(glm::vec3 minVertPos, int leftNodeIndex, glm::vec3 maxVertPos, int rightNodeIndex, bool isLeaf, int firstFaceIndex, int lastFaceIndex) 
+        : minVertPos(minVertPos), leftNodeIndex(leftNodeIndex), maxVertPos(maxVertPos), rightNodeIndex(rightNodeIndex), 
+        isLeaf(isLeaf), firstFaceIndex(firstFaceIndex), lastFaceIndex(lastFaceIndex) {
+
+    }
+};
+
 struct ModelInfo {
     int vertexCount;
     int indexCount;
     int materialIndex;
+    int bvhNodeIndex;
 
-    ModelInfo(int vertexCount, int indexCount, int materialIndex) : 
-        vertexCount(vertexCount), indexCount(indexCount), materialIndex(materialIndex) {
+    ModelInfo(int vertexCount, int indexCount, int materialIndex, int bvhNodeIndex) : 
+        vertexCount(vertexCount), indexCount(indexCount), materialIndex(materialIndex), bvhNodeIndex(bvhNodeIndex) {
 
     }
 };
 
 
 // functions
-void addQuad(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 normal, Material material, 
-    std::vector<Vertex> &vertices, std::vector<glm::vec4> &indices, std::vector<Material> &materials, std::vector<ModelInfo> &modelInfos);
-void addModel(const char* modelFilePath, glm::vec3 offset, float scale, Material material, 
-    std::vector<Vertex> &vertices, std::vector<glm::vec4> &indices, std::vector<Material> &materials, std::vector<ModelInfo> &modelInfos);
-void createCornellBox(glm::vec3 center, glm::vec3 size, 
-    std::vector<Vertex> &vertices, std::vector<glm::vec4> &indices, std::vector<Material> &materials, std::vector<ModelInfo> &modelInfos, std::vector<Sphere> &spheres);
+void addQuad(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 normal, Material material);
+void addModel(const char* modelFilePath, glm::vec3 offset, float scale, Material material);
+void createCornellBox(glm::vec3 center, glm::vec3 size);
 void renderRaytracingQuad(Shader shader, GLuint screenTex);
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 void mouseCallback(GLFWwindow* window, double xpos, double ypos);
@@ -83,6 +105,14 @@ int frameCounter = 0;
 // timing
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
+
+
+std::vector<Sphere> spheres;
+std::vector<Vertex> vertices;
+std::vector<glm::vec4> indices;
+std::vector<Material> materials;
+std::vector<BVHNode> bvhNodes;
+std::vector<ModelInfo> modelInfos;
 
 int main() {
     glfwInit();
@@ -123,8 +153,6 @@ int main() {
 
     ComputeShader pathTracingComputeShader("../shaders/pathTracingShader.comp");
 
-    std::vector<Sphere> spheres;
-
     // Sphere s(glm::vec3(0, 2, 1), 0.3, Material(glm::vec3(1), 0.75, glm::vec3(1), 0, 1));
     // spheres.push_back(s);
     // Sphere s1(glm::vec3(0, 0.75, 0.25), 0.1f, Material(glm::vec3(0.25, 0, 1), 0, glm::vec3(1), 0, 0));
@@ -147,13 +175,8 @@ int main() {
     // Sphere floor4(glm::vec3(2, 10, 10), 0.1, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1));
     // spheres.push_back(floor4);
 
-    std::vector<Vertex> vertices;
-    std::vector<glm::vec4> indices;
-    std::vector<Material> materials;
-    std::vector<ModelInfo> modelInfos;
-
-    createCornellBox(glm::vec3(0), glm::vec3(6), vertices, indices, materials, modelInfos, spheres);
-    // addModel("../assets/models/bunny/bun_res4_normals.ply", glm::vec3(0), 5, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1), vertices, indices, materials, modelInfos);
+    createCornellBox(glm::vec3(0), glm::vec3(5));
+    addModel("../assets/models/bunny/bun_res4_normals.ply", glm::vec3(0), 1, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1));
 
     GLuint sphereSSBO;
     glGenBuffers(1, &sphereSSBO);
@@ -183,11 +206,18 @@ int main() {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, materialSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
+    GLuint bvhNodeSSBO;
+    glGenBuffers(1, &bvhNodeSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, bvhNodeSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(BVHNode) * bvhNodes.size(), bvhNodes.data(), GL_DYNAMIC_COPY);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, bvhNodeSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
     GLuint modelInfoSSBO;
     glGenBuffers(1, &modelInfoSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, modelInfoSSBO);
     glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ModelInfo) * modelInfos.size(), modelInfos.data(), GL_DYNAMIC_COPY);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, modelInfoSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, modelInfoSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     pathTracingComputeShader.use();
@@ -278,7 +308,8 @@ int main() {
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, vertexSSBO);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, indexSSBO);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, materialSSBO);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, modelInfoSSBO);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, bvhNodeSSBO);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, modelInfoSSBO);
 
         pathTracingComputeShader.use();
 
@@ -320,8 +351,7 @@ int main() {
     return 0;
 }
 
-void createCornellBox(glm::vec3 center, glm::vec3 size, 
-    std::vector<Vertex> &vertices, std::vector<glm::vec4> &indices, std::vector<Material> &materials, std::vector<ModelInfo> &modelInfos, std::vector<Sphere> &spheres) {
+void createCornellBox(glm::vec3 center, glm::vec3 size) {
 
     glm::vec3 a = center + glm::vec3(-size.x, -size.y, -size.z) / 2.0f;
     glm::vec3 b = center + glm::vec3(-size.x, -size.y,  size.z) / 2.0f;
@@ -339,21 +369,21 @@ void createCornellBox(glm::vec3 center, glm::vec3 size,
     glm::vec3 normalBack   = glm::vec3( 0,  0, -1);
     glm::vec3 normalFront  = glm::vec3( 0,  0,  1);
 
-    addQuad(a, b, f, e, normalRight, Material(glm::vec3(1, 0, 0), 0, glm::vec3(1), 0, 1), vertices, indices, materials, modelInfos);  // left
-    addQuad(d, c, g, h, normalLeft, Material(glm::vec3(0, 1, 0), 0, glm::vec3(1), 0, 1), vertices, indices, materials, modelInfos);   // right
-    addQuad(a, d, c, b, normalTop, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1), vertices, indices, materials, modelInfos);    // bottom
-    addQuad(e, f, g, h, normalBottom, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1), vertices, indices, materials, modelInfos); // top
-    addQuad(a, e, h, d, normalFront, Material(glm::vec3(0, 0, 1), 0, glm::vec3(1), 0, 1), vertices, indices, materials, modelInfos);  // back
-    addQuad(b, c, g, f, normalBack, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1), vertices, indices, materials, modelInfos);   // front
+    addQuad(a, b, f, e, normalRight, Material(glm::vec3(1, 0, 0), 0, glm::vec3(1), 0, 1));  // left
+    addQuad(d, c, g, h, normalLeft, Material(glm::vec3(0, 1, 0), 0, glm::vec3(1), 0, 1));   // right
+    addQuad(a, d, c, b, normalTop, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1));    // bottom
+    addQuad(e, f, g, h, normalBottom, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1)); // top
+    addQuad(a, e, h, d, normalFront, Material(glm::vec3(0, 0, 1), 0, glm::vec3(1), 0, 1));  // back
+    addQuad(b, c, g, f, normalBack, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1));   // front
 
     glm::vec3 lightE = glm::vec3(e.x / 3.0f, e.y - 0.00001, e.z / 3.0f);
     glm::vec3 lightF = glm::vec3(f.x / 3.0f, f.y - 0.00001, f.z / 3.0f);
     glm::vec3 lightG = glm::vec3(g.x / 3.0f, g.y - 0.00001, g.z / 3.0f);
     glm::vec3 lightH = glm::vec3(h.x / 3.0f, h.y - 0.00001, h.z / 3.0f);
 
-    addQuad(lightE, lightF, lightG, lightH, normalBottom, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 2, 1), vertices, indices, materials, modelInfos);   // light
+    addQuad(lightE, lightF, lightG, lightH, normalBottom, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 5, 1));   // light
 
-    // Sphere lightSphere3(glm::vec3(0, 0, 0), 1, Material(glm::vec3(1), 0, glm::vec3(1), 1, 0));
+    // Sphere lightSphere3(glm::vec3(0, 0, 0), 1, Material(glm::vec3(0.5), 1, glm::vec3(0), 1, 1));
     // spheres.push_back(lightSphere3);
 
     // Sphere aS(a, 0.1, Material(glm::vec3(1, 0, 1), 0, glm::vec3(1), 0, 1));
@@ -374,25 +404,39 @@ void createCornellBox(glm::vec3 center, glm::vec3 size,
     // spheres.push_back(hS);
 }
 
-void addQuad(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 normal, Material material, 
-            std::vector<Vertex> &vertices, std::vector<glm::vec4> &indices, std::vector<Material> &materials, std::vector<ModelInfo> &modelInfos) {
+void addQuad(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 normal, Material material) {
 
     vertices.push_back(Vertex(v0, normal));
     vertices.push_back(Vertex(v1, normal));
     vertices.push_back(Vertex(v2, normal));
     vertices.push_back(Vertex(v3, normal));
 
+    float minX = glm::min(v0.x, glm::min(v1.x, glm::min(v2.x, v3.x)));
+    float minY = glm::min(v0.y, glm::min(v1.y, glm::min(v2.y, v3.y)));
+    float minZ = glm::min(v0.z, glm::min(v1.z, glm::min(v2.z, v3.z)));
+
+    float maxX = glm::max(v0.x, glm::max(v1.x, glm::max(v2.x, v3.x)));
+    float maxY = glm::max(v0.y, glm::max(v1.y, glm::max(v2.y, v3.y)));
+    float maxZ = glm::max(v0.z, glm::max(v1.z, glm::max(v2.z, v3.z)));
+ 
+    int firstFaceIndex = indices.size();
     indices.push_back(glm::vec4(0, 1, 2, 0));
+    int lastFaceIndex = indices.size();
     indices.push_back(glm::vec4(0, 2, 3, 0));
+
+    // std::cout << faces[0] << ", " << faces[1] << std::endl;
+
+    int bvhNodeIndex = bvhNodes.size();
+    BVHNode bvhNode(glm::vec3(minX, minY, minZ), glm::vec3(maxX, maxY, maxZ), true, firstFaceIndex, lastFaceIndex);
+    bvhNodes.push_back(bvhNode);
 
     int matIndex = materials.size();
     materials.push_back(material);
 
-    modelInfos.push_back(ModelInfo(4, 2, matIndex));
+    modelInfos.push_back(ModelInfo(4, 2, matIndex, bvhNodeIndex));
 }
 
-void addModel(const char* modelFilePath, glm::vec3 offset, float scale, Material material,
-    std::vector<Vertex> &vertices, std::vector<glm::vec4> &indices, std::vector<Material> &materials, std::vector<ModelInfo> &modelInfos) {
+void addModel(const char* modelFilePath, glm::vec3 offset, float scale, Material material) {
 
     ModelUtils modelUtils;
     // Model model = modelUtils.createModelFromPLY(modelFilePath, false);
@@ -404,19 +448,44 @@ void addModel(const char* modelFilePath, glm::vec3 offset, float scale, Material
 
     materials.push_back(material);
 
-    ModelInfo modModelInfo(mod.vertices.size(), mod.faces.size(), modelInfos.size());
-    modelInfos.push_back(modModelInfo);
+    float minX = 1000000;
+    float minY = 1000000;
+    float minZ = 1000000;
+
+    float maxX = -1000000;
+    float maxY = -1000000;
+    float maxZ = -1000000;
     
     for (int i = 0; i < mod.vertices.size(); i++) {
         glm::vec3 normal = glm::vec3(mod.vertices[i].nX, mod.vertices[i].nY, mod.vertices[i].nZ);
         glm::vec3 pos = glm::vec3(mod.vertices[i].x, mod.vertices[i].y, mod.vertices[i].z);
+        pos = (pos + offset) * scale;
 
-        vertices.push_back(Vertex((pos + offset) * scale, normal));
+        minX = glm::min(pos.x, minX);
+        minY = glm::min(pos.y, minY);
+        minZ = glm::min(pos.z, minZ);
+
+        maxX = glm::max(pos.x, maxX);
+        maxY = glm::max(pos.y, maxY);
+        maxZ = glm::max(pos.z, maxZ);
+
+        vertices.push_back(Vertex(pos, normal));
     }
+
+    int firstFaceIndex = indices.size();
 
     for (int i = 0; i < mod.faces.size(); i++) {
         indices.push_back(glm::vec4(mod.faces[i].indices[0], mod.faces[i].indices[1], mod.faces[i].indices[2], 0));
     }
+
+    int lastFaceIndex = indices.size() - 1;
+
+    int bvhNodeIndex = bvhNodes.size();
+    BVHNode bvhNode(glm::vec3(minX, minY, minZ), glm::vec3(maxX, maxY, maxZ), true, firstFaceIndex, lastFaceIndex);
+    bvhNodes.push_back(bvhNode);
+
+    ModelInfo modModelInfo(mod.vertices.size(), mod.faces.size(), modelInfos.size(), bvhNodeIndex);
+    modelInfos.push_back(modModelInfo);
 
     // mod.transferDataToGPU();
 }
