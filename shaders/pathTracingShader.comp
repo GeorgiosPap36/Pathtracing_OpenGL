@@ -35,19 +35,19 @@ struct Vertex {
 
 struct BVHNode {
     vec3 minVertPos;
-    int leftNodeIndex;
-    vec3 maxVertPos;
-    int rightNodeIndex;
-    bool isLeaf;
     int firstFaceIndex;
+    vec3 maxVertPos;
     int lastFaceIndex;
+    bool isLeaf;
+    int missIndex;
 };
 
 struct ModelInfo {
     int vertexCount;
     int indexCount;
     int materialIndex;
-    int bvhNodeIndex;
+    int bvhNodeFirstIndex;
+    int bvhNodeLastIndex;
 };
 
 struct Ray {
@@ -222,38 +222,41 @@ bool rayAABBIntersection(Ray ray, vec3 minVertPos, vec3 maxVertPos) {
     return tmax >= tmin && tmax > 0;;
 }
 
-HitInfo traverseBVH(Ray ray, BVHNode bvhNode, int modelIndex, int vertexOffset) {
+HitInfo traverseBVH(Ray ray, int firstBvhNodeIndex, int lastBvhNodeIndex, int modelIndex, int vertexOffset) {
     HitInfo closestHitInfo;
     closestHitInfo.hit = false;
     closestHitInfo.dist = MAX_INT;
     closestHitInfo.material.color = BG_COLOR;
     closestHitInfo.material.luminosity = 0;
 
-    BVHNode node = bvhNode;
+    for (int i = firstBvhNodeIndex; i <= lastBvhNodeIndex; i++) {
+        BVHNode node = bvhNodes[i];
+        bool intersectsBVH = rayAABBIntersection(ray, node.minVertPos, node.maxVertPos);
 
-    bool intersectsBVH = rayAABBIntersection(ray, node.minVertPos, node.maxVertPos);
+        if (!intersectsBVH) {
+            i = node.missIndex - 1;
 
-    while (intersectsBVH) {
-        if (node.isLeaf) {
-            for (int i = node.firstFaceIndex; i <= node.lastFaceIndex; i++) {
-                Vertex t1 = vertices[int(indices[i].x) + vertexOffset];
-                Vertex t2 = vertices[int(indices[i].y) + vertexOffset];
-                Vertex t3 = vertices[int(indices[i].z) + vertexOffset];
+            if (i < 0) {
+                break;
+            }
+        } else {
+            if (node.isLeaf) {
+                for (int j = node.firstFaceIndex; j <= node.lastFaceIndex; j++) {
+                    Vertex t1 = vertices[int(indices[j].x) + vertexOffset];
+                    Vertex t2 = vertices[int(indices[j].y) + vertexOffset];
+                    Vertex t3 = vertices[int(indices[j].z) + vertexOffset];
 
-                HitInfo hitInfo = rayTriangleIntersection(ray, t1, t2, t3, modelIndex);
-                if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
-                    closestHitInfo.hit = hitInfo.hit;
-                    closestHitInfo.dist = hitInfo.dist;
-                    closestHitInfo.point = hitInfo.point;
-                    closestHitInfo.normal = hitInfo.normal;
-                    closestHitInfo.material = hitInfo.material;
+                    HitInfo hitInfo = rayTriangleIntersection(ray, t1, t2, t3, modelIndex);
+                    if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
+                        closestHitInfo.hit = hitInfo.hit;
+                        closestHitInfo.dist = hitInfo.dist;
+                        closestHitInfo.point = hitInfo.point;
+                        closestHitInfo.normal = hitInfo.normal;
+                        closestHitInfo.material = hitInfo.material;
+                    }
                 }
             }
-
-            return closestHitInfo;
         }
-
-        
     }
 
     return closestHitInfo;
@@ -306,7 +309,7 @@ HitInfo findFirstIntersection(Ray ray) {
 
     for (int i = 0; i < numberOfModels; i++) {
 
-        HitInfo hitInfo = traverseBVH(ray, bvhNodes[modelInfos[i].bvhNodeIndex], i, vertexOffset);
+        HitInfo hitInfo = traverseBVH(ray, modelInfos[i].bvhNodeFirstIndex, modelInfos[i].bvhNodeLastIndex, i, vertexOffset);
         if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
             closestHitInfo.hit = hitInfo.hit;
             closestHitInfo.dist = hitInfo.dist;
@@ -358,7 +361,7 @@ vec3 trace(Ray ray, inout uint rngState) {
         } else {
             break;
         }
-    }  
+    }
 
     return color * luminosity;
 }
