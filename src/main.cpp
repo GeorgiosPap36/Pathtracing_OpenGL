@@ -59,7 +59,7 @@ struct ModelInfo {
 
 // functions
 void addQuad(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 normal, Material material);
-void addModel(const char* modelFilePath, glm::vec3 offset, float scale, Material material);
+void addModel(const char* modelFilePath, glm::vec3 offset, float scale, Material material, int maximumNumberOfFacesPerNode);
 void createCornellBox(glm::vec3 center, glm::vec3 size);
 void renderRaytracingQuad(Shader shader, GLuint screenTex);
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
@@ -67,8 +67,8 @@ void mouseCallback(GLFWwindow* window, double xpos, double ypos);
 void processInput(GLFWwindow* window);
 
 // settings
-const unsigned int SCR_WIDTH = 1280;
-const unsigned int SCR_HEIGHT = 720;
+const unsigned int SCR_WIDTH = 720;
+const unsigned int SCR_HEIGHT = 480;
 
 // camera
 Camera camera(glm::vec3(0, 0, 2.0f));
@@ -153,7 +153,7 @@ int main() {
     // spheres.push_back(floor4);
 
     createCornellBox(glm::vec3(0), glm::vec3(5));
-    addModel("../assets/models/bunny/bun_res4_normals.ply", glm::vec3(0), 8, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1));
+    addModel("../assets/models/dragon_recon/dragon_res2_normals.ply", glm::vec3(0), 8, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1), 2);
 
     GLuint sphereSSBO;
     glGenBuffers(1, &sphereSSBO);
@@ -413,7 +413,7 @@ void addQuad(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 n
     modelInfos.push_back(ModelInfo(4, 2, matIndex, bvhNodeIndex, bvhNodeIndex));
 }
 
-void addModel(const char* modelFilePath, glm::vec3 offset, float scale, Material material) {
+void addModel(const char* modelFilePath, glm::vec3 offset, float scale, Material material, int maximumNumberOfFacesPerNode) {
 
     ModelUtils modelUtils;
     // Model model = modelUtils.createModelFromPLY(modelFilePath, false);
@@ -483,14 +483,15 @@ void addModel(const char* modelFilePath, glm::vec3 offset, float scale, Material
         centroids.push_back((glm::vec3(x0, y0, z0) + glm::vec3(x1, y1, z1) + glm::vec3(x2, y2, z2)) * 0.3333f);
     }
 
-    std::cout << modifiedVertexPositions.size() << ", " << centroids.size() << ", " << modelFaces.size() << std::endl;
+    std::cout << "Number of vertices: " << modifiedVertexPositions.size() << std::endl;
+    std::cout << "Number of faces: " << modelFaces.size() << std::endl;
 
     int lastFaceIndex = indices.size() - 1;
 
     int bvhNodeIndex = bvhNodes.size();
 
     auto bvh = modelUtils.subdivideModel(glm::vec3(minX, minY, minZ), glm::vec3(maxX, maxY, maxZ), 
-                                        modelFaces, centroids, modifiedVertexPositions, indices, 5);
+                                        modelFaces, centroids, modifiedVertexPositions, indices, maximumNumberOfFacesPerNode);
 
     BVHTree& bvhTree = *bvh; 
     bvhTree.isRoot = true;
