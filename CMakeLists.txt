@@ -15,6 +15,7 @@ set(SOURCES
     src/camera.cpp
     src/model/model.cpp
     src/model/model_utils.cpp
+    src/model/bvh_utils.cpp
     dependencies/glad.c
 )
 

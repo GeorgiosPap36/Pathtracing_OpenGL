@@ -229,12 +229,19 @@ HitInfo traverseBVH(Ray ray, int firstBvhNodeIndex, int lastBvhNodeIndex, int mo
     closestHitInfo.material.color = BG_COLOR;
     closestHitInfo.material.luminosity = 0;
 
-    for (int i = firstBvhNodeIndex; i <= lastBvhNodeIndex; i++) {
-        BVHNode node = bvhNodes[i];
-        bool intersectsBVH = rayAABBIntersection(ray, node.minVertPos, node.maxVertPos);
+    int i = firstBvhNodeIndex;
+    while (i <= lastBvhNodeIndex) {
+        // bool isLeaf = bvhNodes[i].isLeaf;
+        // int missIndex = bvhNodes[i].missIndex;
+        // vec3 minVertPos = bvhNodes[i].minVertPos;
+        // vec3 maxVertPos = bvhNodes[i].maxVertPos;
+        // int firstFaceIndex = bvhNodes[i].firstFaceIndex;
+        // int lastFaceIndex = bvhNodes[i].lastFaceIndex;
 
-        if (!intersectsBVH) {
-            i = node.missIndex - 1;
+        BVHNode node = bvhNodes[i];
+
+        if (!rayAABBIntersection(ray, node.minVertPos, node.maxVertPos)) {
+            i = node.missIndex;
 
             if (i < 0) {
                 break;
@@ -256,6 +263,8 @@ HitInfo traverseBVH(Ray ray, int firstBvhNodeIndex, int lastBvhNodeIndex, int mo
                     }
                 }
             }
+
+            i++;
         }
     }
 

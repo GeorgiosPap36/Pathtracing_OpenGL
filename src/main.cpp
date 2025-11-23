@@ -15,6 +15,7 @@
 #include "camera.h"
 
 #include "model/model_utils.h"
+#include "model/bvh_utils.h"
 #include "model/model.h"
 
 
@@ -67,8 +68,8 @@ void mouseCallback(GLFWwindow* window, double xpos, double ypos);
 void processInput(GLFWwindow* window);
 
 // settings
-const unsigned int SCR_WIDTH = 720;
-const unsigned int SCR_HEIGHT = 480;
+const unsigned int SCR_WIDTH = 1280;
+const unsigned int SCR_HEIGHT = 720;
 
 // camera
 Camera camera(glm::vec3(0, 0, 2.0f));
@@ -153,7 +154,7 @@ int main() {
     // spheres.push_back(floor4);
 
     createCornellBox(glm::vec3(0), glm::vec3(5));
-    addModel("../assets/models/dragon_recon/dragon_res2_normals.ply", glm::vec3(0), 8, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1), 2);
+    addModel("../assets/models/dragon_recon/dragon_res4_normals.ply", glm::vec3(0), 8, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1), 5);
 
     GLuint sphereSSBO;
     glGenBuffers(1, &sphereSSBO);
@@ -490,12 +491,14 @@ void addModel(const char* modelFilePath, glm::vec3 offset, float scale, Material
 
     int bvhNodeIndex = bvhNodes.size();
 
-    auto bvh = modelUtils.subdivideModel(glm::vec3(minX, minY, minZ), glm::vec3(maxX, maxY, maxZ), 
+    BVHUtils bvhUtils;
+
+    auto bvh = bvhUtils.subdivideModel(glm::vec3(minX, minY, minZ), glm::vec3(maxX, maxY, maxZ), 
                                         modelFaces, centroids, modifiedVertexPositions, indices, maximumNumberOfFacesPerNode);
 
     BVHTree& bvhTree = *bvh; 
     bvhTree.isRoot = true;
-    modelUtils.addBVHTreeToBVHNodes(bvhTree, -1, false, bvhNodes);
+    bvhUtils.addBVHTreeToBVHNodes(bvhTree, -1, false, bvhNodes);
 
     ModelInfo modModelInfo(mod.vertices.size(), mod.faces.size(), modelInfos.size(), bvhNodeIndex, bvhNodes.size() - 1);
     modelInfos.push_back(modModelInfo);
