@@ -33,6 +33,32 @@ struct alignas(16) Vertex{
     }
 };
 
+struct alignas(16) Material {
+    glm::vec3 color;
+    float smoothness;
+    glm::vec3 emissionColor;
+    float emissionStrength;
+    float specularProbability;
+                             
+    Material(glm::vec3  color, float smoothness, glm::vec3 emissionColor, float emissionStrength, float specularProbability) : 
+        color(color), smoothness(smoothness), emissionColor(emissionColor), emissionStrength(emissionStrength), specularProbability(specularProbability) {
+
+    }
+};
+
+struct ModelInfo {
+    int vertexCount;
+    int indexCount;
+    int materialIndex;
+    int bvhNodeFirstIndex;
+    int bvhNodeLastIndex;
+
+    ModelInfo(int vertexCount, int indexCount, int materialIndex, int bvhNodeFirstIndex, int bvhNodeLastIndex) : 
+        vertexCount(vertexCount), indexCount(indexCount), materialIndex(materialIndex), bvhNodeFirstIndex(bvhNodeFirstIndex), bvhNodeLastIndex(bvhNodeLastIndex) {
+
+    }
+};
+
 class Model {
 public:
     std::vector<Vertex> vertices;

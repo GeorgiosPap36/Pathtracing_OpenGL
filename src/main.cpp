@@ -19,20 +19,6 @@
 #include "model/model.h"
 
 
-
-struct alignas(16) Material {
-    glm::vec3 color;
-    float smoothness;
-    glm::vec3 emissionColor;
-    float emissionStrength;
-    float specularProbability;
-                             
-    Material(glm::vec3  color, float smoothness, glm::vec3 emissionColor, float emissionStrength, float specularProbability) : 
-        color(color), smoothness(smoothness), emissionColor(emissionColor), emissionStrength(emissionStrength), specularProbability(specularProbability) {
-
-    }
-};
-
 struct alignas(16) Sphere {
     glm::vec3 center;
     float radius;
@@ -43,20 +29,6 @@ struct alignas(16) Sphere {
 
     }
 };
-
-struct ModelInfo {
-    int vertexCount;
-    int indexCount;
-    int materialIndex;
-    int bvhNodeFirstIndex;
-    int bvhNodeLastIndex;
-
-    ModelInfo(int vertexCount, int indexCount, int materialIndex, int bvhNodeFirstIndex, int bvhNodeLastIndex) : 
-        vertexCount(vertexCount), indexCount(indexCount), materialIndex(materialIndex), bvhNodeFirstIndex(bvhNodeFirstIndex), bvhNodeLastIndex(bvhNodeLastIndex) {
-
-    }
-};
-
 
 // functions
 void addQuad(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 normal, Material material);
@@ -131,30 +103,11 @@ int main() {
 
     ComputeShader pathTracingComputeShader("../shaders/pathTracingShader.comp");
 
-    // Sphere s(glm::vec3(0, 2, 1), 0.3, Material(glm::vec3(1), 0.75, glm::vec3(1), 0, 1));
-    // spheres.push_back(s);
-    // Sphere s1(glm::vec3(0, 0.75, 0.25), 0.1f, Material(glm::vec3(0.25, 0, 1), 0, glm::vec3(1), 0, 0));
-    // spheres.push_back(s1);
-    //
-    // Sphere lightSphere(glm::vec3(0, 50, -100), 50, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 1, 0));
-    // spheres.push_back(lightSphere);
-    // Sphere lightSphere2(glm::vec3(0, 100, 125), 75, Material(glm::vec3(1, 0.5, 0.3), 0, glm::vec3(1), 1, 0));
-    // spheres.push_back(lightSphere2);
-    //
-    // Sphere floorS(glm::vec3(0, -100, 0), 100, Material(glm::vec3(1, 1, 1), 0.25, glm::vec3(1), 0, 1));
-    // spheres.push_back(floorS);
-    //
-    // Sphere floor1(glm::vec3(2, 4, 5), 0.1, Material(glm::vec3(1, 0, 1), 0, glm::vec3(1), 0, 1));
-    // spheres.push_back(floor1);
-    // Sphere floor2(glm::vec3(2, 4, 10), 0.1, Material(glm::vec3(0, 1, 0), 0, glm::vec3(1), 0, 1));
-    // spheres.push_back(floor2);
-    // Sphere floor3(glm::vec3(2, 10, 5), 0.1, Material(glm::vec3(0, 0, 1), 0, glm::vec3(1), 0, 1));
-    // spheres.push_back(floor3);
-    // Sphere floor4(glm::vec3(2, 10, 10), 0.1, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1));
-    // spheres.push_back(floor4);
-
     createCornellBox(glm::vec3(0), glm::vec3(5));
-    // addModel("../assets/models/bunny/bun_res4_normals.ply", glm::vec3(0), 10, Material(glm::vec3(1), 0, glm::vec3(0), 0, 1), 2);
+    // addModel("../assets/models/dragon_recon/dragon_res4_normals.ply", glm::vec3(0, -0.1, 0), 20, Material(glm::vec3(1), 0, glm::vec3(0), 0, 1), 2);
+    
+    Sphere sphere1(glm::vec3(0, 0, 0), 1, Material(glm::vec3(0.5), 0.95, glm::vec3(0), 0, 1));
+    spheres.push_back(sphere1);
 
     GLuint sphereSSBO;
     glGenBuffers(1, &sphereSSBO);
@@ -232,17 +185,6 @@ int main() {
     glBindImageTexture(1, lastFrameTex, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA32F);
 
     pathTracingComputeShader.dispatch(SCR_WIDTH / 8, SCR_HEIGHT / 8, 1);
-
-    // glBindBuffer(GL_SHADER_STORAGE_BUFFER, sphereSSBO);
-    // float* ptr = (float*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
-    // if (ptr) {
-    //     for (int i = 0; i < 10; i++)
-    //         std::cout << "Result[" << i << "] = " << ptr[i] << std::endl;
-    //     glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-    // }
-    // glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-    // glDeleteBuffers(1, &sphereSSBO);
-
 
     // FPS variables
     double prevTime = 0.0f;
@@ -360,10 +302,6 @@ void createCornellBox(glm::vec3 center, glm::vec3 size) {
     glm::vec3 lightH = glm::vec3(h.x / 3.0f, h.y - 0.00001, h.z / 3.0f);
 
     addQuad(lightE, lightF, lightG, lightH, normalBottom, Material(glm::vec3(1), 0, glm::normalize(glm::vec3(1)), 10, 1)); // light
-
-    Sphere sphere1(glm::vec3(0, 0, 0), 1, Material(glm::vec3(0.5), 0.95, glm::vec3(0), 0, 1));
-    spheres.push_back(sphere1);
-
     // Sphere aS(a, 0.1, Material(glm::vec3(1, 0, 1), 0, glm::vec3(1), 1, 1));
     // spheres.push_back(aS);
     // Sphere bS(b, 0.1, Material(glm::vec3(1, 0, 1), 0, glm::vec3(1), 1, 1));
@@ -459,8 +397,6 @@ void addModel(const char* modelFilePath, glm::vec3 offset, float scale, Material
     std::vector<glm::vec3> centroids;
 
     for (int i = 0; i < mod.faces.size(); i++) {
-        // indices.push_back(glm::vec4(mod.faces[i].indices[0], mod.faces[i].indices[1], mod.faces[i].indices[2], 0));
-
         int index0 = mod.faces[i].indices[0];
         int index1 = mod.faces[i].indices[1];
         int index2 = mod.faces[i].indices[2];
