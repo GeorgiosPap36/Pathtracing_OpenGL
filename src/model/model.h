@@ -33,21 +33,6 @@ struct alignas(16) Vertex{
     }
 };
 
-struct alignas(16) BVHNode {
-    glm::vec3 minVertPos;
-    int firstFaceIndex;
-    glm::vec3 maxVertPos;
-    int lastFaceIndex;
-    bool isLeaf;
-    int missIndex;
-
-    BVHNode(glm::vec3 minVertPos, glm::vec3 maxVertPos, bool isLeaf, int missIndex, int firstFaceIndex, int lastFaceIndex) 
-        : minVertPos(minVertPos), maxVertPos(maxVertPos), isLeaf(isLeaf), 
-        missIndex(missIndex), firstFaceIndex(firstFaceIndex), lastFaceIndex(lastFaceIndex) {
-
-    }
-};
-
 class Model {
 public:
     std::vector<Vertex> vertices;

@@ -18,7 +18,7 @@ struct Material {
     vec3 color;
     float smoothness; 
     vec3 emissionColor;
-    float luminosity;
+    float emissionStrength;
     float specularProbability;
 }; 
 
@@ -79,7 +79,7 @@ layout(std430, binding = 3) buffer Vertices {
 };
 
 layout(std430, binding = 4) buffer Indices {
-    vec4 indices[];
+    ivec4 indices[];
 };
 
 layout(std430, binding = 5) buffer Materials {
@@ -110,12 +110,6 @@ uniform bool accumulateFrames;
 |  FUNCTIONS  |
 *-------------*/
 
-vec2 getUV(ivec2 id) {
-    float aspectRatio = float(width) / float(height);
-    return vec2(((float(id.x) / float(width)) * 2.0 - 1.0) * aspectRatio,
-                (float(id.y) / float(height)) * 2.0 - 1.0);
-}
-
 float randomValue(inout uint state) {
     state = state * 747796405 + 2891336453;
     uint result = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
@@ -132,11 +126,18 @@ vec3 randomUnitVector(inout uint state) {
     return vec3(x, y, z);
 }
 
+vec2 getUV(ivec2 id, inout uint state) {
+    float aspectRatio = float(width) / float(height);
+    return vec2(((float(id.x + randomValue(state)) / float(width)) * 2.0 - 1.0) * aspectRatio,
+                (float(id.y + randomValue(state)) / float(height)) * 2.0 - 1.0);
+}
+
 HitInfo raySphereIntersection(Ray r, Sphere sphere) {
     HitInfo hitInfo;
     hitInfo.hit = false;
     hitInfo.material.color = BG_COLOR;
-    hitInfo.material.luminosity = 0.0f;
+    hitInfo.material.emissionColor = BG_COLOR;
+    hitInfo.material.emissionStrength = 0.0f;
     hitInfo.material.smoothness = 0.0f;
 
     vec3 center = sphere.center;
@@ -168,7 +169,8 @@ HitInfo rayTriangleIntersection(Ray r, Vertex t1, Vertex t2, Vertex t3, int mode
     HitInfo hitInfo;
     hitInfo.hit = false;
     hitInfo.material.color = BG_COLOR;
-    hitInfo.material.luminosity = 0.0f;
+    hitInfo.material.emissionColor = BG_COLOR;
+    hitInfo.material.emissionStrength = 0.0f;
     hitInfo.material.smoothness = 0.0f;
 
     vec3 c1 = -r.direction;
@@ -227,45 +229,45 @@ HitInfo traverseBVH(Ray ray, int firstBvhNodeIndex, int lastBvhNodeIndex, int mo
     closestHitInfo.hit = false;
     closestHitInfo.dist = MAX_INT;
     closestHitInfo.material.color = BG_COLOR;
-    closestHitInfo.material.luminosity = 0;
+    closestHitInfo.material.emissionColor = BG_COLOR;
+    closestHitInfo.material.emissionStrength = 0;
+
+    bool isLeaf;
+    int missIndex;
+    vec3 minVertPos;
+    vec3 maxVertPos;
+    int firstFaceIndex;
+    int lastFaceIndex;
 
     int i = firstBvhNodeIndex;
-    while (i <= lastBvhNodeIndex) {
-        // bool isLeaf = bvhNodes[i].isLeaf;
-        // int missIndex = bvhNodes[i].missIndex;
-        // vec3 minVertPos = bvhNodes[i].minVertPos;
-        // vec3 maxVertPos = bvhNodes[i].maxVertPos;
-        // int firstFaceIndex = bvhNodes[i].firstFaceIndex;
-        // int lastFaceIndex = bvhNodes[i].lastFaceIndex;
+    while (i >= 0 && i <= lastBvhNodeIndex) {
+        isLeaf = bvhNodes[i].isLeaf;
+        missIndex = bvhNodes[i].missIndex;
+        minVertPos = bvhNodes[i].minVertPos;
+        maxVertPos = bvhNodes[i].maxVertPos;
+        firstFaceIndex = bvhNodes[i].firstFaceIndex;
+        lastFaceIndex = bvhNodes[i].lastFaceIndex;
 
-        BVHNode node = bvhNodes[i];
+        if (!rayAABBIntersection(ray, minVertPos, maxVertPos)) {
+            i = missIndex;
+            continue;
+        }
 
-        if (!rayAABBIntersection(ray, node.minVertPos, node.maxVertPos)) {
-            i = node.missIndex;
+        if (isLeaf) {
+            for (int j = firstFaceIndex; j <= lastFaceIndex; j++) {
+                Vertex t1 = vertices[indices[j].x + vertexOffset];
+                Vertex t2 = vertices[indices[j].y + vertexOffset];
+                Vertex t3 = vertices[indices[j].z + vertexOffset];
 
-            if (i < 0) {
-                break;
-            }
-        } else {
-            if (node.isLeaf) {
-                for (int j = node.firstFaceIndex; j <= node.lastFaceIndex; j++) {
-                    Vertex t1 = vertices[int(indices[j].x) + vertexOffset];
-                    Vertex t2 = vertices[int(indices[j].y) + vertexOffset];
-                    Vertex t3 = vertices[int(indices[j].z) + vertexOffset];
-
-                    HitInfo hitInfo = rayTriangleIntersection(ray, t1, t2, t3, modelIndex);
-                    if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
-                        closestHitInfo.hit = hitInfo.hit;
-                        closestHitInfo.dist = hitInfo.dist;
-                        closestHitInfo.point = hitInfo.point;
-                        closestHitInfo.normal = hitInfo.normal;
-                        closestHitInfo.material = hitInfo.material;
-                    }
+                HitInfo hitInfo = rayTriangleIntersection(ray, t1, t2, t3, modelIndex);
+                if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
+                    closestHitInfo = hitInfo;
                 }
             }
-
-            i++;
         }
+
+        i++;
+        
     }
 
     return closestHitInfo;
@@ -276,43 +278,15 @@ HitInfo findFirstIntersection(Ray ray) {
     closestHitInfo.hit = false;
     closestHitInfo.dist = MAX_INT;
     closestHitInfo.material.color = BG_COLOR;
-    closestHitInfo.material.luminosity = 0;
+    closestHitInfo.material.emissionColor = BG_COLOR;
+    closestHitInfo.material.emissionStrength = 0;
 
     for (int i = 0; i < numberOfSpheres; i++) {
         HitInfo hitInfo = raySphereIntersection(ray, spheres[i]);
         if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
-            closestHitInfo.hit = hitInfo.hit;
-            closestHitInfo.dist = hitInfo.dist;
-            closestHitInfo.point = hitInfo.point;
-            closestHitInfo.normal = hitInfo.normal;
-            closestHitInfo.material = hitInfo.material;
+            closestHitInfo = hitInfo;
         }
     }
-
-    // int indexOffset = 0;
-    // int vertexOffset = 0;
-
-    // for (int i = 0; i < numberOfModels; i++) {
-    //     int faceCount = modelInfos[i].indexCount;
-        
-    //     for (int j = 0; j < faceCount; j++) {
-    //         Vertex t1 = vertices[int(indices[j + indexOffset].x) + vertexOffset];
-    //         Vertex t2 = vertices[int(indices[j + indexOffset].y) + vertexOffset];
-    //         Vertex t3 = vertices[int(indices[j + indexOffset].z) + vertexOffset];
-
-    //         HitInfo hitInfo = rayTriangleIntersection(ray, t1, t2, t3, i);
-    //         if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
-    //             closestHitInfo.hit = hitInfo.hit;
-    //             closestHitInfo.dist = hitInfo.dist;
-    //             closestHitInfo.point = hitInfo.point;
-    //             closestHitInfo.normal = hitInfo.normal;
-    //             closestHitInfo.material = hitInfo.material;
-    //         }
-    //     }
-
-    //     vertexOffset += modelInfos[i].vertexCount;
-    //     indexOffset += faceCount;
-    // }
 
     int vertexOffset = 0;
 
@@ -320,11 +294,7 @@ HitInfo findFirstIntersection(Ray ray) {
 
         HitInfo hitInfo = traverseBVH(ray, modelInfos[i].bvhNodeFirstIndex, modelInfos[i].bvhNodeLastIndex, i, vertexOffset);
         if (hitInfo.hit && hitInfo.dist < closestHitInfo.dist) {
-            closestHitInfo.hit = hitInfo.hit;
-            closestHitInfo.dist = hitInfo.dist;
-            closestHitInfo.point = hitInfo.point;
-            closestHitInfo.normal = hitInfo.normal;
-            closestHitInfo.material = hitInfo.material;
+            closestHitInfo = hitInfo;
         }
 
         vertexOffset += modelInfos[i].vertexCount;
@@ -354,25 +324,33 @@ vec3 getSpecularDirection(vec3 rayDir, vec3 surfaceNormal) {
 vec3 trace(Ray ray, inout uint rngState) {
     HitInfo hitInfo;
     vec3 color = vec3(1);
-    float luminosity = 0;
+    vec3 radiance = vec3(0);
 
     for (int i = 0; i < MAX_DEPTH; i++) {
         hitInfo = findFirstIntersection(ray);
-        
-        if (hitInfo.hit) {
-            luminosity += hitInfo.material.luminosity;
-            color *= hitInfo.material.color;
 
-            ray.origin = hitInfo.point + hitInfo.normal * EPSILON;
-            ray.direction = mix(getDiffuseDirection(hitInfo.normal, rngState), 
-                                getSpecularDirection(ray.direction, hitInfo.normal), 
-                                hitInfo.material.smoothness * hitInfo.material.specularProbability);
-        } else {
+        if (!hitInfo.hit) {
             break;
         }
+        
+        radiance += color * hitInfo.material.emissionColor * hitInfo.material.emissionStrength;
+        color *= hitInfo.material.color;
+
+        float p = clamp(max(color.x, max(color.y, color.z)), 0.05, 1.0);
+        if (i > 2 && p < randomValue(rngState)) {
+            break;
+        }
+
+        color /= p;
+
+        ray.origin = hitInfo.point + hitInfo.normal * EPSILON;
+        ray.direction = mix(getDiffuseDirection(hitInfo.normal, rngState), 
+                            getSpecularDirection(ray.direction, hitInfo.normal), 
+                            hitInfo.material.smoothness * hitInfo.material.specularProbability);
+        
     }
 
-    return color * luminosity;
+    return radiance;
 }
 
 
@@ -395,7 +373,7 @@ void main() {
     }
 
     Ray ray;
-    vec2 uv = getUV(id);
+    vec2 uv = getUV(id, rngState);
     int depth = 0;
 
     vec3 color = vec3(0, 0, 0);
@@ -403,7 +381,7 @@ void main() {
         ray = createRay(uv);
         color += trace(ray, rngState);
     }
-    // color = color / RAYS_PER_PIXEL;
+    color = color / RAYS_PER_PIXEL;
 
     if (accumulateFrames) {
         vec3 prev = imageLoad(lastFrame, id).rgb;

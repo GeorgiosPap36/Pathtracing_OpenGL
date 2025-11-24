@@ -4,7 +4,7 @@ std::unique_ptr<BVHTree> BVHUtils::subdivideModel(glm::vec3 minPoint, glm::vec3 
                                    std::vector<std::array<int,3>>& modelFaces,
                                    std::vector<glm::vec3>& centroids,
                                    std::vector<glm::vec3>& modelVertices,
-                                   std::vector<glm::vec4>& indices, 
+                                   std::vector<glm::ivec4>& indices, 
                                    int numberOfFacesInLeaves) {
 
     std::unique_ptr<BVHTree> bvh = std::make_unique<BVHTree>(BVHNode(minPoint, maxPoint, false, -1, 0, 0));

@@ -24,11 +24,11 @@ struct alignas(16) Material {
     glm::vec3 color;
     float smoothness;
     glm::vec3 emissionColor;
-    float luminosity;
+    float emissionStrength;
     float specularProbability;
                              
-    Material(glm::vec3  color, float smoothness, glm::vec3 emissionColor, float luminosity, float specularProbability) : 
-        color(color), smoothness(smoothness), emissionColor(emissionColor), luminosity(luminosity), specularProbability(specularProbability) {
+    Material(glm::vec3  color, float smoothness, glm::vec3 emissionColor, float emissionStrength, float specularProbability) : 
+        color(color), smoothness(smoothness), emissionColor(emissionColor), emissionStrength(emissionStrength), specularProbability(specularProbability) {
 
     }
 };
@@ -87,7 +87,7 @@ float lastFrame = 0.0f;
 
 std::vector<Sphere> spheres;
 std::vector<Vertex> vertices;
-std::vector<glm::vec4> indices;
+std::vector<glm::ivec4> indices;
 std::vector<Material> materials;
 std::vector<BVHNode> bvhNodes;
 std::vector<ModelInfo> modelInfos;
@@ -154,7 +154,7 @@ int main() {
     // spheres.push_back(floor4);
 
     createCornellBox(glm::vec3(0), glm::vec3(5));
-    addModel("../assets/models/dragon_recon/dragon_res4_normals.ply", glm::vec3(0), 8, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1), 5);
+    // addModel("../assets/models/bunny/bun_res4_normals.ply", glm::vec3(0), 10, Material(glm::vec3(1), 0, glm::vec3(0), 0, 1), 2);
 
     GLuint sphereSSBO;
     glGenBuffers(1, &sphereSSBO);
@@ -347,22 +347,22 @@ void createCornellBox(glm::vec3 center, glm::vec3 size) {
     glm::vec3 normalBack   = glm::vec3( 0,  0, -1);
     glm::vec3 normalFront  = glm::vec3( 0,  0,  1);
 
-    addQuad(a, b, f, e, normalRight, Material(glm::vec3(1, 0, 0), 0, glm::vec3(1), 0, 1));  // left
-    addQuad(d, c, g, h, normalLeft, Material(glm::vec3(0, 1, 0), 0, glm::vec3(1), 0, 1));   // right
-    addQuad(a, d, c, b, normalTop, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1));    // bottom
-    addQuad(e, f, g, h, normalBottom, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1)); // top
-    addQuad(a, e, h, d, normalFront, Material(glm::vec3(0, 0, 1), 0, glm::vec3(1), 0, 1));  // back
-    addQuad(b, c, g, f, normalBack, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 0, 1));   // front
+    addQuad(a, b, f, e, normalRight, Material(glm::vec3(1, 0, 0), 0, glm::vec3(0), 0, 1));  // left
+    addQuad(d, c, g, h, normalLeft, Material(glm::vec3(0, 1, 0), 0, glm::vec3(0), 0, 1));   // right
+    addQuad(a, d, c, b, normalTop, Material(glm::vec3(1, 1, 1), 0, glm::vec3(0), 0, 1));    // bottom
+    addQuad(e, f, g, h, normalBottom, Material(glm::vec3(1, 1, 1), 0, glm::vec3(0), 0, 1)); // top
+    addQuad(a, e, h, d, normalFront, Material(glm::vec3(0, 0, 1), 0, glm::vec3(0), 0, 1));  // back
+    addQuad(b, c, g, f, normalBack, Material(glm::vec3(1, 1, 1), 0, glm::vec3(0), 0, 1));   // front
 
     glm::vec3 lightE = glm::vec3(e.x / 3.0f, e.y - 0.00001, e.z / 3.0f);
     glm::vec3 lightF = glm::vec3(f.x / 3.0f, f.y - 0.00001, f.z / 3.0f);
     glm::vec3 lightG = glm::vec3(g.x / 3.0f, g.y - 0.00001, g.z / 3.0f);
     glm::vec3 lightH = glm::vec3(h.x / 3.0f, h.y - 0.00001, h.z / 3.0f);
 
-    addQuad(lightE, lightF, lightG, lightH, normalBottom, Material(glm::vec3(1, 1, 1), 0, glm::vec3(1), 5, 1));   // light
+    addQuad(lightE, lightF, lightG, lightH, normalBottom, Material(glm::vec3(1), 0, glm::normalize(glm::vec3(1)), 10, 1)); // light
 
-    // Sphere sphere1(glm::vec3(0, 0, 0), 1, Material(glm::vec3(0.5), 0.95, glm::vec3(0), 0, 1));
-    // spheres.push_back(sphere1);
+    Sphere sphere1(glm::vec3(0, 0, 0), 1, Material(glm::vec3(0.5), 0.95, glm::vec3(0), 0, 1));
+    spheres.push_back(sphere1);
 
     // Sphere aS(a, 0.1, Material(glm::vec3(1, 0, 1), 0, glm::vec3(1), 1, 1));
     // spheres.push_back(aS);
@@ -568,7 +568,7 @@ void processInput(GLFWwindow* window) {
 
             accumulateFrames = !accumulateFrames;
             fKeyPressed = true;
-            std::cout << "Accumulate frames = " << accumulateFrames << std::endl;
+            std::cout << "Frame accumulation is " << (accumulateFrames == 1 ? "ON" : "OFF") << std::endl;
         }
     } else {
         fKeyPressed = false;

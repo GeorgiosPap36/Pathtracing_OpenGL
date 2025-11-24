@@ -8,6 +8,22 @@
 
 #include "model.h"
 
+
+struct alignas(16) BVHNode {
+    glm::vec3 minVertPos;
+    int firstFaceIndex;
+    glm::vec3 maxVertPos;
+    int lastFaceIndex;
+    bool isLeaf;
+    int missIndex;
+
+    BVHNode(glm::vec3 minVertPos, glm::vec3 maxVertPos, bool isLeaf, int missIndex, int firstFaceIndex, int lastFaceIndex) 
+        : minVertPos(minVertPos), maxVertPos(maxVertPos), isLeaf(isLeaf), 
+        missIndex(missIndex), firstFaceIndex(firstFaceIndex), lastFaceIndex(lastFaceIndex) {
+
+    }
+};
+
 struct BVHTree {
     BVHNode bvhNode;
     std::unique_ptr<BVHTree> leftChild;
@@ -25,7 +41,7 @@ public:
                            std::vector<std::array<int,3>>& modelFaces,
                            std::vector<glm::vec3>& centroids,
                            std::vector<glm::vec3>& modelVertices,
-                           std::vector<glm::vec4>& indices, 
+                           std::vector<glm::ivec4>& indices, 
                            int numberOfFacesInLeaves);
 
     void addBVHTreeToBVHNodes(BVHTree& bvh, int missIndex, bool isRight, std::vector<BVHNode>& bvhNodes);
