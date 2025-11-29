@@ -1,4 +1,13 @@
-# Raytracing_OpenGL
+# Path-tracing
+
+This is a path-tracer written using C++ and OpenGL. It can render diffuse, reflective and transparent materials. The acceleration structure used is a threaded BVH (binary tree).
+
+
+## Some scenes:
+
+![Dragon](assets/pictures/Dragon.png)
+![Sphere mirror](assets/pictures/Sphere_mirror.png)
+![Red glass dragon](assets/pictures/Dragon_red_glass.png)
 
 ## Sources:
 - [Implementing a practical rendering system using GLSL - Toshiya Hachisuka](https://cs.uwaterloo.ca/%7Ethachisu/tdf2015.pdf)
