@@ -38,13 +38,27 @@ struct alignas(16) Material {
     float smoothness;
     glm::vec3 emissionColor;
     float emissionStrength;
+    glm::vec3 absorption;
+    float absorptionStrength;
     float refractionProbability;
     float refractionIndex;
-                             
+
     Material(glm::vec3  color, float smoothness, glm::vec3 emissionColor, float emissionStrength, float refractionProbability, float refractionIndex) : 
+
         color(color), smoothness(smoothness), 
         emissionColor(emissionColor), emissionStrength(emissionStrength), 
-        refractionProbability(refractionProbability), refractionIndex(refractionIndex) {
+        refractionProbability(refractionProbability), refractionIndex(refractionIndex),
+        absorption(glm::vec3(0)), absorptionStrength(0) {
+
+    }
+                             
+    Material(glm::vec3  color, float smoothness, glm::vec3 emissionColor, float emissionStrength, 
+            glm::vec3 absorption, float absorptionStrength, float refractionProbability, float refractionIndex) : 
+
+        color(color), smoothness(smoothness), 
+        emissionColor(emissionColor), emissionStrength(emissionStrength), 
+        refractionProbability(refractionProbability), refractionIndex(refractionIndex),
+        absorption(absorption), absorptionStrength(absorptionStrength) {
 
     }
 };

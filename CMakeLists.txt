@@ -13,6 +13,7 @@ set(SOURCES
     src/shader.cpp
     src/compute_shader.cpp
     src/camera.cpp
+    src/scene.cpp
     src/model/model.cpp
     src/model/model_utils.cpp
     src/model/bvh_utils.cpp
