@@ -1,4 +1,4 @@
-# Path-tracing
+# Path-tracer
 
 This is a path-tracer written using C++ and OpenGL. It can render diffuse, reflective and transparent materials. The acceleration structure used is a threaded BVH (binary tree).
 
