@@ -8,6 +8,7 @@ This is a path-tracer written using C++ and OpenGL. It can render diffuse, refle
 ![Dragon](assets/pictures/Dragon.png)
 ![Sphere mirror](assets/pictures/Sphere_mirror.png)
 ![Red glass dragon](assets/pictures/Dragon_red_glass.png)
+![Mirror room](assets/pictures/Mirror_room.png)
 
 ## Sources:
 - [Implementing a practical rendering system using GLSL - Toshiya Hachisuka](https://cs.uwaterloo.ca/%7Ethachisu/tdf2015.pdf)

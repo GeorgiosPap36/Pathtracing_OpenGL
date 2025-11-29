@@ -5,7 +5,8 @@ Scene::Scene(ComputeShader computeShader, unsigned int SCR_WIDTH, unsigned int S
     computeShader(computeShader), SCR_WIDTH(SCR_WIDTH), SCR_HEIGHT(SCR_HEIGHT) {
     
     // testScene();
-    testScene2();
+    // testScene2();
+    mirrorsEveryWhere();
     
     createSSBOs();
 }
@@ -208,7 +209,7 @@ void Scene::createCornellBox(glm::vec3 center, glm::vec3 size, std::vector<Mater
     addQuad(a, d, c, b, normalBottom, materials[2]); // bottom
     addQuad(e, f, g, h, normalTop, materials[3]);    // top
     addQuad(a, e, h, d, normalBack, materials[4]);   // back
-    // addQuad(b, c, g, f, normalFront, materials[5]);  // front
+    addQuad(b, c, g, f, normalFront, materials[5]);  // front
 
     glm::vec3 lightE = glm::vec3(e.x / 3.0f, e.y - 0.00001, e.z / 3.0f);
     glm::vec3 lightF = glm::vec3(f.x / 3.0f, f.y - 0.00001, f.z / 3.0f);
@@ -328,5 +329,27 @@ void Scene::testScene2() {
 
     addModel("../assets/models/dragon_recon/dragon_normals.ply", glm::vec3(0, -0.1, 0), 15, 30, 
         Material(glm::vec3(1), 0.75, glm::normalize(glm::vec3(1)), 30, glm::vec3(0.5, 1, 1), 1, 0.95, 1.25), 
+        2);
+}
+
+void Scene::mirrorsEveryWhere() {
+    std::vector<Material> materials;
+    Material left(glm::vec3(1), 1, glm::vec3(0), 0, 0, 1);  
+    materials.push_back(left);
+    Material right(glm::vec3(1), 1, glm::vec3(0), 0, 0, 1);   
+    materials.push_back(right);
+    Material bottom(glm::vec3(1), 1, glm::vec3(0), 0, 0, 1);  
+    materials.push_back(bottom);
+    Material top(glm::vec3(1), 1, glm::vec3(0), 0, 0, 1);     
+    materials.push_back(top);
+    Material back(glm::vec3(1), 1, glm::vec3(0), 0, 0, 1);   
+    materials.push_back(back); 
+    Material front(glm::vec3(1), 1, glm::vec3(0), 0, 0, 1);   
+    materials.push_back(front);
+
+    createCornellBox(glm::vec3(0), glm::vec3(5), materials);
+
+    addModel("../assets/models/dragon_recon/dragon_normals.ply", glm::vec3(0, -0.1, 0), 8, 45, 
+        Material(glm::vec3(1, 0.5, 0.25), 0, glm::normalize(glm::vec3(1)), 0, glm::vec3(0.5, 1, 1), 0, 0, 1.25), 
         2);
 }

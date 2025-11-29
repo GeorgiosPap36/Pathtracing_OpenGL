@@ -62,6 +62,7 @@ private:
     // Scenes
     void testScene();
     void testScene2();
+    void mirrorsEveryWhere();
 };
 
 
